@@ -1,62 +1,130 @@
-# ESP32 (38-pin) + MCP over MQTT + Ollama Cloud
+# Esp-MQTT-LLM 🚀
 
-Two pieces:
-- `firmware/` — ESP-IDF project for the ESP32. Exposes 4 tools (`led_on`, `led_off`,
-  `get_led_state`, `read_boot_button`) over MQTT using the [MCP over MQTT](https://docs.emqx.com/en/emqx/latest/emqx-ai/mcp-over-mqtt/overview.html) protocol.
-- `agent/` — Python script for your PC. Connects to the same broker as an MCP client,
-  discovers the ESP32's tools, and lets Ollama Cloud call them.
+An end-to-end implementation of **Model Context Protocol (MCP) over MQTT** connecting a physical **ESP32 microcontroller devkit** to a remote Large Language Model (**Ollama Cloud**) via a PC-side Python agent. 
 
-## 1. Firmware setup
+This repository allows an LLM to dynamically control hardware (such as turning on/off an onboard LED, reading the physical boot button state, and performing paced sequences like blinking) over a lightweight, message-based protocol.
 
-1. Install ESP-IDF (v5.x) and confirm `idf.py` is on your PATH.
-2. Get the MCP-over-MQTT component into your project:
+---
+
+## 🏗️ System Architecture
+
+![System Architecture](assets/architecture.png)
+
+```mermaid
+graph TD
+    User([User Prompt]) --> Agent[Ollama PC Agent]
+    Agent -->|Ollama Chat API| Ollama[Ollama Cloud / gemma4:31b-cloud]
+    Ollama -->|Function Calls| Agent
+    Agent -->|MQTT v5.0 control/rpc| Broker[EMQX MQTT Broker]
+    Broker -->|MQTT v5.0 control/rpc| ESP32[ESP32 Microcontroller]
+    ESP32 -->|GPIO Control| LED((Onboard LED))
+    ESP32 -->|GPIO State| Button([BOOT Button])
+```
+
+---
+
+## 🛠️ Features & Tools
+
+The ESP32 registers its capabilities dynamically upon connection. The agent client also exposes helper utilities to extend the LLM's physical control capabilities.
+
+| Tool Name | Source | Description | Parameters |
+| :--- | :--- | :--- | :--- |
+| `led_on` | ESP32 | Turns the onboard blue LED (GPIO 2) ON | None |
+| `led_off` | ESP32 | Turns the onboard blue LED (GPIO 2) OFF | None |
+| `get_led_state` | ESP32 | Retrieves the current state of the LED (`on` / `off`) | None |
+| `read_boot_button` | ESP32 | Reads the physical BOOT button state (GPIO 0) | None |
+| `delay` | Python Agent | Pauses execution sequences (e.g. for custom blink rates) | `seconds` (number) |
+
+---
+
+## 📂 Repository Structure
+
+- [main/](file:///c:/ESP%20MCP%20MQTT/main): ESP-IDF project source code, task handlers, and GPIO drivers.
+- [components/esp-mcp-over-mqtt/](file:///c:/ESP%20MCP%20MQTT/components/esp-mcp-over-mqtt): Client/Server MQTT C implementation of the MCP protocol.
+- [ollama_agent.py](file:///c:/ESP%20MCP%20MQTT/ollama_agent.py): Python client running the interactive Ollama LLM chat loop and tool executor.
+- [sdkconfig.defaults](file:///c:/ESP%20MCP%20MQTT/sdkconfig.defaults): Project configuration defaults (enables MQTT 5.0).
+
+---
+
+## ⚡ 1. Firmware Setup (ESP32)
+
+### Prerequisites
+- ESP-IDF v6.0 installed and configured on your shell.
+- ESP32 devkit connected via USB.
+
+### Build and Flash
+1. Open PowerShell and activate the ESP-IDF environment:
+   ```powershell
+   . C:\esp\v6.0.2\esp-idf\export.ps1
    ```
-   cd firmware
-   mkdir -p components
-   git clone https://github.com/mqtt-ai/esp-mcp-over-mqtt components/esp-mcp-over-mqtt
-   ```
-3. Edit `main/main.c`: set `WIFI_SSID`, `WIFI_PASS`, and `MQTT_BROKER_URI`
-   (point it at your own EMQX/Mosquitto broker, or `mqtt://broker.emqx.io` for
-   quick testing — that's a shared public broker, fine for experiments, not for
-   anything you care about keeping private).
-4. Build and flash (plain 38-pin devkit is the original Xtensa ESP32, target `esp32`):
-   ```
+2. Configure targets and clean configurations:
+   ```powershell
    idf.py set-target esp32
-   idf.py -p /dev/ttyUSB0 build flash monitor
    ```
-   (swap `/dev/ttyUSB0` for your port — `COMx` on Windows)
-5. Watch the monitor output for "MCP server running" — that means it registered
-   its 4 tools with the broker.
+3. Build the project:
+   ```powershell
+   idf.py build
+   ```
+4. Flash the binary and start the serial monitor (adjust COM port as needed):
+   ```powershell
+   idf.py -p COM16 flash monitor
+   ```
 
-## 2. Agent setup (run this from Antigravity's terminal, or any terminal)
+> [!IMPORTANT]
+> - **Wi-Fi Target**: ESP32 only supports **2.4 GHz** Wi-Fi networks. Make sure `WIFI_SSID` in `main/main.c` is configured for a 2.4 GHz AP.
+> - **MQTT 5.0**: This project utilizes MQTT User Properties, requiring **MQTT v5.0** protocol support. This is enabled via `CONFIG_MQTT_PROTOCOL_5=y` in `sdkconfig.defaults`.
 
+---
+
+## 🧠 2. Agent Setup (PC Client)
+
+The agent runs locally on your PC, communicating with the broker and Ollama Cloud.
+
+### Prerequisites
+1. Install client libraries:
+   ```powershell
+   pip install ollama "mcp[cli]" --break-system-packages
+   pip install "git+https://github.com/emqx/mcp-python-sdk@main" --break-system-packages
+   ```
+2. Set up your environment variables:
+   ```powershell
+   $env:OLLAMA_API_KEY="your_ollama_key"
+   $env:MQTT_BROKER_HOST="broker.emqx.io"
+   ```
+
+### Run the Agent
+Execute the agent script:
+```powershell
+python ollama_agent.py
 ```
-pip install ollama "mcp[cli]" --break-system-packages
-pip install "git+https://github.com/emqx/mcp-python-sdk@main" --break-system-packages
 
-export OLLAMA_API_KEY=your_ollama_cloud_key   # from https://ollama.com/settings/keys
-export MQTT_BROKER_HOST=broker.emqx.io        # same host as MQTT_BROKER_URI above (just the hostname, no scheme/port)
+---
 
-python agent/ollama_agent.py
+## 💬 Interaction Examples
+
+Once the agent establishes connection, you can converse in plain English to control your hardware:
+
+### Turning on the LED
+```
+you> turn on the led
+INFO     Called led_on({}) on esp32_devkit -> {"status": "ok", "led": "on"}
+agent> I've turned on the onboard LED for you.
 ```
 
-Then type things like `turn the LED on` — Ollama Cloud decides to call the
-`led_on` tool, the agent forwards that call over MQTT to the ESP32, and the
-device executes it.
+### Checking the Button State
+```
+you> is the boot button pressed?
+INFO     Called read_boot_button({}) on esp32_devkit -> {"pressed": false}
+agent> No, the physical BOOT button on the board is currently released.
+```
 
-## Notes / things to double-check
-
-- **Board target**: confirmed as a plain 38-pin ESP32 devkit (module silkscreen
-  just says "ESP32") → `idf.py set-target esp32`. If it turns out to be an
-  S3/C3 variant later, that target line is the only thing that changes.
-- **LED/button pins**: assumed GPIO2 (LED) and GPIO0 (BOOT button), the common
-  default on most 38-pin DevKitC-style boards. Adjust `LED_GPIO`/`BUTTON_GPIO`
-  in `main.c` if your board differs.
-- **Tool parameters**: the 4 firmware tools are intentionally zero-argument —
-  that's the only tool shape confirmed in EMQX's public docs for the C SDK. If
-  you want parameterized tools (e.g. `set_pwm(duty)`), check the `property_t`
-  struct in the component's `mcp_server.h` after cloning it.
-- **Security**: this setup has no MQTT auth/TLS configured by default. Fine for
-  a bench project; for anything reachable from the internet, set a broker
-  username/password (or client cert) and fill in `MQTT_USERNAME`/`MQTT_PASSWORD`
-  in `main.c`.
+### Custom Blinking Rate (Uses local `delay` pacing)
+```
+you> blink the led 3 times with 1.5 sec delay
+INFO     Called led_on({}) on esp32_devkit -> {"status": "ok", "led": "on"}
+INFO     Local delay tool: pausing for 1.5 seconds...
+INFO     Called led_off({}) on esp32_devkit -> {"status": "ok", "led": "off"}
+INFO     Local delay tool: pausing for 1.5 seconds...
+...
+agent> I have blinked the LED 3 times with a 1.5-second delay.
+```
