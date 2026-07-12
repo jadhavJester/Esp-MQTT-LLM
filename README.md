@@ -128,3 +128,26 @@ INFO     Local delay tool: pausing for 1.5 seconds...
 ...
 agent> I have blinked the LED 3 times with a 1.5-second delay.
 ```
+
+---
+
+## 📱 3. Mobile & Web Dashboard (Zero-Setup Control)
+
+You can control your ESP32 directly from your phone's browser without needing any running Python script or LLM key by hosting the included HTML5 Dashboard.
+
+### 🌐 View the Live Dashboard
+The dashboard is self-contained under the `docs/` folder and is ready to be hosted forever for free on **GitHub Pages**.
+
+### How to host it:
+1. Go to your repository settings page: `https://github.com/jadhavJester/Esp-MQTT-LLM/settings/pages`
+2. Under **Build and deployment**, set **Source** to `Deploy from a branch`.
+3. Select the `main` branch, and change the folder option from `/ (root)` to `/docs`.
+4. Click **Save**.
+5. Once deployed (takes about 30 seconds), your site will be live at:
+   `https://jadhavJester.github.io/Esp-MQTT-LLM/`
+
+### Features:
+- **Direct WebSockets Control**: Connects directly to `broker.emqx.io` over secure WebSockets (`wss://`).
+- **Interactive Console**: Shows all incoming/outgoing JSON-RPC messages and status payloads.
+- **Real-time Status Polling**: Automatically queries the ESP32's current LED and physical BOOT button state.
+- **Mobile Friendly**: Designed to be responsive, touch-friendly, and lightweight for smooth control on iOS and Android.
