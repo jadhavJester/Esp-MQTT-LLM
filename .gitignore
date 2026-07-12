@@ -1,0 +1,23 @@
+# ESP-IDF build artifacts
+build/
+sdkconfig
+sdkconfig.old
+dependencies.lock
+
+# Python cache and environments
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+
+# Editor and IDE configurations
+.vscode/
+.idea/
+
+# Local/temporary files
+*.log
+tmp/
+mnt/
