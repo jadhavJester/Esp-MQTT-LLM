@@ -376,34 +376,19 @@ static bool mcp_server_tool_check(mcp_server_t *server, const char *tool_name,
             if (server->tools[i].property_count != n_args) {
                 return false;
             }
-            property_t *sorted_args = calloc(n_args, sizeof(property_t));
-            if (!sorted_args) {
-                return false;
-            }
             for (int j = 0; j < n_args; j++) {
-                bool found = false;
-                for (int k = 0; k < n_args; k++) {
-                    if (strcmp(server->tools[i].properties[j].name, args[k].name) == 0) {
-                        sorted_args[j] = args[k];
-                        if (server->tools[i].properties[j].type == PROPERTY_INTEGER) {
-                            sorted_args[j].type = PROPERTY_INTEGER;
-                            if (args[k].type == PROPERTY_REAL) {
-                                sorted_args[j].value.integer_value = (long long) args[k].value.real_value;
-                            }
-                        }
-                        found = true;
-                        break;
+                if (strcmp(server->tools[i].properties[j].name, args[j].name) !=
+                    0) {
+                    return false; // Argument name mismatch
+                } else {
+                    if (server->tools[i].properties[j].type ==
+                        PROPERTY_INTEGER) {
+                        args[j].type = PROPERTY_INTEGER;
+                        args[j].value.integer_value =
+                            (long long) args[j].value.real_value;
                     }
                 }
-                if (!found) {
-                    free(sorted_args);
-                    return false; // Required parameter not found
-                }
             }
-            for (int j = 0; j < n_args; j++) {
-                args[j] = sorted_args[j];
-            }
-            free(sorted_args);
             *tool = &server->tools[i];
             return true;
         }
