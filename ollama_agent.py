@@ -99,13 +99,14 @@ Guidelines:
 
 
 async def chat_loop():
-    print("Connected. Type a message (or 'quit'). Example: 'turn the LED on'")
+    print("Connected. Type a message (or 'quit'). Example: 'turn the LED on'", flush=True)
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     while True:
         try:
-            user_input = await anyio.to_thread.run_sync(input, "you> ")
+            print("you> ", end="", flush=True)
+            user_input = await anyio.to_thread.run_sync(input)
         except (EOFError, KeyboardInterrupt):
-            print("\nGoodbye!")
+            print("\nGoodbye!", flush=True)
             break
         if user_input.strip().lower() in ("quit", "exit"):
             break
@@ -170,7 +171,7 @@ async def chat_loop():
             msg = response["message"]
             messages.append(msg)
 
-        print(f"agent> {msg.get('content', '')}")
+        print(f"agent> {msg.get('content', '')}", flush=True)
 
 
 async def main():
