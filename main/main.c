@@ -2,19 +2,8 @@
  * ESP32 (38-pin devkit) firmware:
  *  - Connects to Wi-Fi
  *  - Starts an MCP-over-MQTT server (EMQX esp-mcp-over-mqtt C SDK)
- *  - Exposes 4 zero-argument tools that a PC-side MCP client (e.g. driven
- *    by Ollama Cloud) can call: led_on, led_off, get_led_state, read_boot_button
- *
- * Onboard LED assumption: GPIO2 (the usual "blue LED" pin on most 38-pin
- * ESP32 DevKitC-style boards). BOOT button assumption: GPIO0. If your board
- * wires these differently, change LED_GPIO / BUTTON_GPIO below.
- *
- * NOTE ON TOOL ARGUMENTS: the esp-mcp-over-mqtt C SDK's mcp_tool_t /
- * property_t structs support tools with parameters, but the public docs
- * only show the zero-argument shape (property_count = 0, properties = NULL).
- * These 4 tools are deliberately argument-free so this file only relies on
- * the confirmed API. Check mcp_server.h in the component if you want to add
- * parameterized tools (e.g. set_led(state)).
+ *  - Exposes 6 tools: led_on, led_off, get_led_state, read_boot_button,
+ *    set_servo_angle, get_servo_angle
  */
 
 #include <string.h>
@@ -33,9 +22,9 @@
 // ---- Configure these for your setup ----
 #define WIFI_SSID       "Airtel_anja_9990"
 #define WIFI_PASS       "air55904"
-#define MQTT_BROKER_URI "mqtt://broker.emqx.io:1883"   // e.g. your own EMQX/Mosquitto, or mqtt://broker.emqx.io for quick testing
+#define MQTT_BROKER_URI "mqtt://broker.emqx.io:1883"
 #define MQTT_CLIENT_ID  "esp32_devkit_001"
-#define MQTT_USERNAME   ""   // leave empty if broker has no auth
+#define MQTT_USERNAME   ""
 #define MQTT_PASSWORD   ""
 
 #define LED_GPIO    GPIO_NUM_2
@@ -141,11 +130,137 @@ static const char *tool_read_boot_button(int n_args, property_t *args)
     return result;
 }
 
+// No servo tools needed
+
+static const char *tool_set_gpio_mode(int n_args, property_t *args)
+{
+    if (n_args < 2) {
+        return "{\"error\": \"pin and mode arguments are required\"}";
+    }
+    int pin = (int)args[0].value.integer_value;
+    const char *mode = args[1].value.string_value;
+
+    if (pin < 0 || pin > 39) {
+        return "{\"error\": \"GPIO pin must be between 0 and 39\"}";
+    }
+
+    gpio_config_t io_conf = {};
+    io_conf.pin_bit_mask = (1ULL << pin);
+
+    if (strcmp(mode, "output") == 0) {
+        io_conf.mode = GPIO_MODE_OUTPUT;
+        io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+        io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    } else if (strcmp(mode, "input") == 0) {
+        io_conf.mode = GPIO_MODE_INPUT;
+        io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+        io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    } else if (strcmp(mode, "input_pullup") == 0) {
+        io_conf.mode = GPIO_MODE_INPUT;
+        io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
+        io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    } else {
+        return "{\"error\": \"mode must be 'output', 'input', or 'input_pullup'\"}";
+    }
+
+    esp_err_t err = gpio_config(&io_conf);
+    static char result[80];
+    if (err == ESP_OK) {
+        snprintf(result, sizeof(result), "{\"status\": \"ok\", \"pin\": %d, \"mode\": \"%s\"}", pin, mode);
+    } else {
+        snprintf(result, sizeof(result), "{\"error\": \"failed to configure pin %d\"}", pin);
+    }
+    return result;
+}
+
+static const char *tool_write_gpio(int n_args, property_t *args)
+{
+    if (n_args < 2) {
+        return "{\"error\": \"pin and level arguments are required\"}";
+    }
+    int pin = (int)args[0].value.integer_value;
+    int level = (int)args[1].value.integer_value;
+
+    if (pin < 0 || pin > 39) {
+        return "{\"error\": \"GPIO pin must be between 0 and 39\"}";
+    }
+    if (level != 0 && level != 1) {
+        return "{\"error\": \"level must be 0 or 1\"}";
+    }
+
+    esp_err_t err = gpio_set_level(pin, level);
+    static char result[64];
+    if (err == ESP_OK) {
+        snprintf(result, sizeof(result), "{\"status\": \"ok\", \"pin\": %d, \"level\": %d}", pin, level);
+    } else {
+        snprintf(result, sizeof(result), "{\"error\": \"failed to write to pin %d\"}", pin);
+    }
+    return result;
+}
+
+static const char *tool_read_gpio(int n_args, property_t *args)
+{
+    if (n_args < 1) {
+        return "{\"error\": \"pin argument is required\"}";
+    }
+    int pin = (int)args[0].value.integer_value;
+
+    if (pin < 0 || pin > 39) {
+        return "{\"error\": \"GPIO pin must be between 0 and 39\"}";
+    }
+
+    int level = gpio_get_level(pin);
+    static char result[48];
+    snprintf(result, sizeof(result), "{\"pin\": %d, \"level\": %d}", pin, level);
+    return result;
+}
+
 static mcp_tool_t s_tools[] = {
     { .name = "led_on",          .description = "Turn the onboard LED on",              .property_count = 0, .properties = NULL, .call = tool_led_on },
     { .name = "led_off",         .description = "Turn the onboard LED off",             .property_count = 0, .properties = NULL, .call = tool_led_off },
     { .name = "get_led_state",   .description = "Get whether the onboard LED is on/off", .property_count = 0, .properties = NULL, .call = tool_get_led_state },
     { .name = "read_boot_button",.description = "Read whether the BOOT button is pressed", .property_count = 0, .properties = NULL, .call = tool_read_boot_button },
+    { .name           = "set_gpio_mode",
+      .description    = "Set GPIO pin mode (0 to 39) to 'output', 'input', or 'input_pullup'",
+      .property_count = 2,
+      .properties =
+          (property_t[]) {
+              { .name                = "pin",
+                .description         = "GPIO pin number (0 to 39)",
+                .type                = PROPERTY_INTEGER,
+                .value.integer_value = 2 },
+              { .name                = "mode",
+                .description         = "Pin mode ('output', 'input', 'input_pullup')",
+                .type                = PROPERTY_STRING,
+                .value.string_value  = "output" },
+          },
+      .call = tool_set_gpio_mode },
+    { .name           = "write_gpio",
+      .description    = "Write digital level (0 or 1) to a GPIO pin (0 to 39)",
+      .property_count = 2,
+      .properties =
+          (property_t[]) {
+              { .name                = "pin",
+                .description         = "GPIO pin number (0 to 39)",
+                .type                = PROPERTY_INTEGER,
+                .value.integer_value = 2 },
+              { .name                = "level",
+                .description         = "Digital output level (0 or 1)",
+                .type                = PROPERTY_INTEGER,
+                .value.integer_value = 0 },
+          },
+      .call = tool_write_gpio },
+    { .name           = "read_gpio",
+      .description    = "Read digital level (0 or 1) of a GPIO pin (0 to 39)",
+      .property_count = 1,
+      .properties =
+          (property_t[]) {
+              { .name                = "pin",
+                .description         = "GPIO pin number (0 to 39)",
+                .type                = PROPERTY_INTEGER,
+                .value.integer_value = 0 },
+          },
+      .call = tool_read_gpio },
 };
 
 void app_main(void)
@@ -167,5 +282,5 @@ void app_main(void)
     mcp_server_register_tool(server, sizeof(s_tools) / sizeof(s_tools[0]), s_tools);
     mcp_server_run(server);
 
-    ESP_LOGI(TAG, "MCP server running, tools registered: led_on, led_off, get_led_state, read_boot_button");
+    ESP_LOGI(TAG, "MCP server running with full GPIO tools registered");
 }

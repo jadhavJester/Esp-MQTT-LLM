@@ -19,7 +19,8 @@ Run:
 import os
 import json
 import logging
-import anyio
+import asyncio
+from datetime import timedelta
 import mcp.client.mqtt as mcp_mqtt
 from mcp.shared.mqtt import configure_logging
 from ollama import Client
@@ -87,12 +88,16 @@ async def call_device_tool(server_name, tool_name, arguments):
     text_parts = [c.text for c in result.content if getattr(c, "type", None) == "text"]
     return "\n".join(text_parts) if text_parts else str(result)
 SYSTEM_PROMPT = """You are a helpful hardware assistant controlling an ESP32 microcontroller devkit via MCP (Model Context Protocol).
-You have tools to control the onboard LED (led_on, led_off, get_led_state), read the physical BOOT button (read_boot_button), and pause/delay execution (delay).
+You have tools to:
+- Control the onboard LED (led_on, led_off, get_led_state)
+- Read the physical BOOT button (read_boot_button)
+- Perform low-level GPIO pin controls on any pin 0 to 39 (set_gpio_mode, write_gpio, read_gpio)
+- Pause/delay execution (delay)
 
 Guidelines:
-1. When asked to blink the LED, turn it on, delay, turn it off, delay, etc. Do not just turn it on and off without a delay, as it will happen too fast for the user to see. Always insert a `delay` tool call between state changes.
-2. If the user asks for a specific number of blinks or a specific delay, use the `delay` tool with the corresponding `seconds` parameter.
-3. If the user asks to wait for the button to be pressed, check the button state. You can poll it if necessary, or explain the status.
+1. When asked to blink the LED, turn it on, delay, turn it off, delay, etc. Always insert a `delay` tool call between state changes.
+2. If the user asks for a specific number of blinks or a specific delay, use the `delay` tool.
+3. If the user asks to control or read any arbitrary GPIO pin, first use `set_gpio_mode` to configure it (e.g. to 'output', 'input', or 'input_pullup'), then use `write_gpio` or `read_gpio`.
 4. Do not output code blocks showing how to write programs. Execute the tools directly to perform the physical tasks on the device.
 5. Keep your responses short and friendly, reporting the outcome of the actions you performed.
 """
@@ -104,7 +109,7 @@ async def chat_loop():
     while True:
         try:
             print("you> ", end="", flush=True)
-            user_input = await anyio.to_thread.run_sync(input)
+            user_input = await asyncio.to_thread(input)
         except (EOFError, KeyboardInterrupt):
             print("\nGoodbye!", flush=True)
             break
@@ -156,7 +161,7 @@ async def chat_loop():
                 if fn_name == "delay":
                     seconds = float(fn_args.get("seconds", 1.0))
                     logger.info(f"Local delay tool: pausing for {seconds} seconds...")
-                    await anyio.sleep(seconds)
+                    await asyncio.sleep(seconds)
                     tool_result = json.dumps({"status": "ok", "delayed_seconds": seconds})
                 else:
                     server_name = tool_owner.get(fn_name)
@@ -178,21 +183,43 @@ async def main():
     async with mcp_mqtt.MqttTransportClient(
         "ollama_agent_client",
         auto_connect_to_mcp_server=False,
-        on_mcp_server_discovered=on_mcp_server_discovered,
+        on_mcp_server_discovered=None,
         on_mcp_connect=on_mcp_connect,
         on_mcp_disconnect=on_mcp_disconnect,
         mqtt_options=mcp_mqtt.MqttOptions(host=MQTT_BROKER_HOST),
     ) as client:
         mcp_client_ref["client"] = client
-        await client.start()
+        logger.info("Connecting to MQTT broker...")
+        await client.start(timeout=timedelta(seconds=5))
         
-        logger.info("Waiting for ESP32 MCP server to connect...")
-        with anyio.move_on_after(10):
-            while not connected_servers:
-                await anyio.sleep(0.1)
+        logger.info("Waiting for ESP32 MCP server to be discovered...")
+        server_discovered = False
+        start_time = asyncio.get_running_loop().time()
+        while "esp32_devkit" not in client.server_list:
+            if asyncio.get_running_loop().time() - start_time > 10:
+                break
+            await asyncio.sleep(0.1)
+        else:
+            server_discovered = True
+            
+        if not server_discovered:
+            logger.warning("No ESP32 MCP server discovered within 10 seconds. Starting chat anyway.")
+        else:
+            logger.info("ESP32 MCP server discovered. Connecting...")
+            try:
+                await client.initialize_mcp_server("esp32_devkit")
+            except Exception as e:
+                logger.error(f"Failed to initialize session: {e}")
+
+        # Wait for tools to load
+        start_time = asyncio.get_running_loop().time()
+        while "esp32_devkit" not in connected_servers:
+            if asyncio.get_running_loop().time() - start_time > 5:
+                break
+            await asyncio.sleep(0.1)
                 
-        if not connected_servers:
-            logger.warning("No ESP32 MCP server connected within 10 seconds. Starting chat anyway.")
+        if "esp32_devkit" not in connected_servers:
+            logger.warning("ESP32 MCP server did not register tools in time. Starting chat anyway.")
         else:
             logger.info("ESP32 MCP server connected and tools loaded successfully.")
             
@@ -200,4 +227,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    anyio.run(main)
+    asyncio.run(main())
