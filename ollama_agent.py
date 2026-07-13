@@ -25,6 +25,77 @@ import mcp.client.mqtt as mcp_mqtt
 from mcp.shared.mqtt import configure_logging
 from ollama import Client
 
+# Monkey patch MqttTransportClient.initialize_mcp_server to avoid AnyIO cancel scope lifetime violations.
+# The original SDK enters the session context manager inside a short-lived background task, but never exits it
+# within that task, leaving the cancel scope dangling on the finished task's stack.
+# We fix this by keeping the background task running inside an `async with` block for the session's entire lifetime.
+import mcp.types as types
+from mcp.shared.exceptions import McpError
+from typing import Literal
+
+async def patched_initialize_mcp_server(
+    self,
+    server_name: str,
+    read_timeout_seconds: float | None = None,
+    sampling_callback = None,
+    list_roots_callback = None,
+    logging_callback = None,
+    message_handler = None
+):
+    if server_name in self.client_sessions:
+        return "already_connected"
+    if server_name not in self.server_list:
+        logger.error(f"MCP server not found, server name: {server_name}")
+        return ("error", "MCP server not found")
+    server_id = self.pick_server_id(server_name)
+
+    async def after_subscribed(subscribe_result: Literal["success", "error"]):
+        if subscribe_result == "error":
+            if self.on_mcp_connect:
+                self._task_group.start_soon(self.on_mcp_connect, self, server_name, ("error", "subscribe_mcp_server_topics_failed"))
+            return
+        client_session = self._create_session(
+            server_id,
+            server_name,
+            read_timeout_seconds,
+            sampling_callback,
+            list_roots_callback,
+            logging_callback,
+            message_handler
+        )
+        self.client_sessions[server_name] = client_session
+        try:
+            logger.debug(f"before initialize: {server_name}")
+            async def after_initialize():
+                try:
+                    async with client_session as session:
+                        init_result = await session.initialize()
+                        session.server_info = init_result
+                        if self.on_mcp_connect:
+                            self._task_group.start_soon(self.on_mcp_connect, self, server_name, ("ok", init_result))
+                        
+                        # Keep the context open and the task alive as long as the session exists
+                        while server_name in self.client_sessions and self.client_sessions[server_name] is client_session:
+                            await asyncio.sleep(0.5)
+                except Exception as e:
+                    self.client_sessions.pop(server_name, None)
+                    logger.error(f"Failed to initialize/run server {server_name}: {e}")
+            self._task_group.start_soon(after_initialize)
+            logger.debug(f"after initialize: {server_name}")
+        except McpError as exc:
+            self.client_sessions.pop(server_name, None)
+            logger.error(f"Failed to connect to MCP server: {exc}")
+            if self.on_mcp_connect:
+                self._task_group.start_soon(self.on_mcp_connect, self, server_name, ("error", McpError))
+
+    if self._subscribe_mcp_server_topics(server_id, server_name, after_subscribed):
+        return "ok"
+    else:
+        return ("error", "send_subscribe_request_failed")
+
+mcp_mqtt.MqttTransportClient.initialize_mcp_server = patched_initialize_mcp_server
+
+
 configure_logging(level="INFO")
 logger = logging.getLogger(__name__)
 
