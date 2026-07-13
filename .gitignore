@@ -21,3 +21,4 @@ env/
 *.log
 tmp/
 mnt/
+curious_robot/memory.json
