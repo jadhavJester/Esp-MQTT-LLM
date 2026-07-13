@@ -256,8 +256,10 @@ async def chat_loop():
 
 
 async def main():
+    import uuid
+    client_id = f"ollama_agent_{uuid.uuid4().hex[:8]}"
     async with mcp_mqtt.MqttTransportClient(
-        "ollama_agent_client",
+        client_id,
         auto_connect_to_mcp_server=False,
         on_mcp_server_discovered=None,
         on_mcp_connect=on_mcp_connect,
