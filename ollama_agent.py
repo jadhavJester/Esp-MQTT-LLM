@@ -32,6 +32,7 @@ from ollama import Client
 import mcp.types as types
 from mcp.shared.exceptions import McpError
 from typing import Literal
+import anyio
 
 async def patched_initialize_mcp_server(
     self,
@@ -76,7 +77,7 @@ async def patched_initialize_mcp_server(
                         
                         # Keep the context open and the task alive as long as the session exists
                         while server_name in self.client_sessions and self.client_sessions[server_name] is client_session:
-                            await asyncio.sleep(0.5)
+                            await anyio.sleep(0.5)
                 except Exception as e:
                     self.client_sessions.pop(server_name, None)
                     logger.error(f"Failed to initialize/run server {server_name}: {e}")
@@ -239,8 +240,12 @@ async def chat_loop():
                     if not server_name:
                         tool_result = f"Error: no connected device exposes tool '{fn_name}'"
                     else:
-                        tool_result = await call_device_tool(server_name, fn_name, fn_args)
-                        logger.info(f"Called {fn_name}({fn_args}) on {server_name} -> {tool_result}")
+                        try:
+                            tool_result = await call_device_tool(server_name, fn_name, fn_args)
+                            logger.info(f"Called {fn_name}({fn_args}) on {server_name} -> {tool_result}")
+                        except Exception as e:
+                            logger.error(f"Error calling {fn_name}({fn_args}) on {server_name}: {e}")
+                            tool_result = json.dumps({"error": str(e)})
                 messages.append({"role": "tool", "content": tool_result, "name": fn_name})
 
             response = ollama_client.chat(model=OLLAMA_MODEL, messages=messages, tools=all_tools)
