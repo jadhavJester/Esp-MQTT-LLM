@@ -151,3 +151,7 @@ The dashboard is self-contained under the `docs/` folder and is ready to be host
 - **Interactive Console**: Shows all incoming/outgoing JSON-RPC messages and status payloads.
 - **Real-time Status Polling**: Automatically queries the ESP32's current LED and physical BOOT button state.
 - **Mobile Friendly**: Designed to be responsive, touch-friendly, and lightweight for smooth control on iOS and Android.
+
+## License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
