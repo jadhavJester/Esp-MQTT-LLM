@@ -155,3 +155,13 @@ The dashboard is self-contained under the `docs/` folder and is ready to be host
 ## License
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+
+## Testing
+
+The PC-side agent (`ollama_agent.py`) has a pytest suite in `tests/`
+covering the MCP-to-Ollama tool-schema conversion:
+
+```bash
+pip install pytest
+python -m pytest -q
+```
