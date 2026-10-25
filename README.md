@@ -39,10 +39,10 @@ The ESP32 registers its capabilities dynamically upon connection. The agent clie
 
 ## 📂 Repository Structure
 
-- [main/](file:///c:/ESP%20MCP%20MQTT/main): ESP-IDF project source code, task handlers, and GPIO drivers.
-- [components/esp-mcp-over-mqtt/](file:///c:/ESP%20MCP%20MQTT/components/esp-mcp-over-mqtt): Client/Server MQTT C implementation of the MCP protocol.
-- [ollama_agent.py](file:///c:/ESP%20MCP%20MQTT/ollama_agent.py): Python client running the interactive Ollama LLM chat loop and tool executor.
-- [sdkconfig.defaults](file:///c:/ESP%20MCP%20MQTT/sdkconfig.defaults): Project configuration defaults (enables MQTT 5.0).
+- [main/](main/): ESP-IDF project source code, task handlers, and GPIO drivers.
+- [components/esp-mcp-over-mqtt/](components/esp-mcp-over-mqtt/): Client/Server MQTT C implementation of the MCP protocol.
+- [ollama_agent.py](ollama_agent.py): Python client running the interactive Ollama LLM chat loop and tool executor.
+- [sdkconfig.defaults](sdkconfig.defaults): Project configuration defaults (enables MQTT 5.0).
 
 ---
 
