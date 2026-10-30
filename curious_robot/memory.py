@@ -1,5 +1,14 @@
 import os
 import json
+import logging
+
+logger = logging.getLogger("explorer_agent")
+
+DEFAULT_DATA = {
+    "episodic_logs": [],
+    "learned_rules": []
+}
+
 
 class MemoryManager:
     def __init__(self, filepath="curious_robot/memory.json"):
@@ -11,15 +20,28 @@ class MemoryManager:
         self.load()
 
     def load(self):
-        if os.path.exists(self.filepath):
-            try:
-                with open(self.filepath, "r") as f:
-                    self.data = json.load(f)
-            except Exception:
-                pass
+        if not os.path.exists(self.filepath):
+            return
+        try:
+            with open(self.filepath, "r") as f:
+                loaded = json.load(f)
+        except (OSError, ValueError) as e:
+            logger.warning(f"Ignoring unreadable memory file {self.filepath}: {e}")
+            return
+        if (isinstance(loaded, dict)
+                and isinstance(loaded.get("episodic_logs"), list)
+                and isinstance(loaded.get("learned_rules"), list)):
+            self.data = loaded
+        else:
+            logger.warning(
+                f"Ignoring malformed memory file {self.filepath}: "
+                "expected JSON object with 'episodic_logs' and 'learned_rules' lists"
+            )
 
     def save(self):
-        os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
+        parent = os.path.dirname(self.filepath)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
         with open(self.filepath, "w") as f:
             json.dump(self.data, f, indent=2)
 
