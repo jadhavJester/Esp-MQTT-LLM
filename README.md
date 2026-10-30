@@ -158,10 +158,16 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 
 ## Testing
 
-The PC-side agent (`ollama_agent.py`) has a pytest suite in `tests/`
-covering the MCP-to-Ollama tool-schema conversion:
+The Python side has a pytest suite in `tests/`:
+
+- `tests/test_ollama_agent_tools.py` — MCP-to-Ollama tool-schema conversion and tool-result text joining in `ollama_agent.py`
+- `tests/test_curious_robot.py` — the offline simulation modules: `Environment` movement/proximity gating/sensing, and `MemoryManager` persistence, duplicate-rule guard, and recovery from corrupt or malformed memory files
 
 ```bash
 pip install pytest
 python -m pytest -q
 ```
+
+`curious_robot/` runs fully offline; the interactive demos in
+`ollama_agent.py` and `curious_robot/main.py` need a real `OLLAMA_API_KEY`
+and are not covered by the automated tests.
