@@ -146,6 +146,35 @@ class CuriousExplorerAgent:
             }
         ]
 
+    def _dispatch_tool(self, fn_name, fn_args):
+        """Route one tool call to the environment or memory and return its result.
+
+        Separated from step() so the dispatch logic is unit-testable without
+        a live LLM connection. Exceptions (unknown tools, missing arguments,
+        bad object names) are handled by the caller.
+        """
+        if fn_name == "scan_room":
+            return self.env.scan_room()
+        elif fn_name == "move_to":
+            return self.env.move_to(float(fn_args["x"]), float(fn_args["y"]))
+        elif fn_name == "examine_visually":
+            return self.env.examine_visually(fn_args["object_name"])
+        elif fn_name == "measure_temperature":
+            return self.env.measure_temperature(fn_args["object_name"])
+        elif fn_name == "measure_voltage":
+            return self.env.measure_voltage(fn_args["object_name"])
+        elif fn_name == "touch":
+            return self.env.touch(fn_args["object_name"])
+        elif fn_name == "taste":
+            return self.env.taste(fn_args["object_name"])
+        elif fn_name == "add_learned_rule":
+            rule_text = fn_args["rule"]
+            self.memory.add_learned_rule(rule_text)
+            print(f"[Memory] Rule Saved to Memory: {rule_text}", flush=True)
+            return {"status": "success", "rule_added": rule_text}
+        else:
+            return {"error": f"Tool '{fn_name}' not implemented."}
+
     async def step(self):
         # Insert current memory summary as context dynamically before thinking
         memory_summary = self.memory.get_summary()
@@ -188,28 +217,7 @@ class CuriousExplorerAgent:
             print(f"[Action] Executing action: {fn_name}({fn_args})", flush=True)
             
             try:
-                # Dispatch tool calls
-                if fn_name == "scan_room":
-                    res = self.env.scan_room()
-                elif fn_name == "move_to":
-                    res = self.env.move_to(float(fn_args["x"]), float(fn_args["y"]))
-                elif fn_name == "examine_visually":
-                    res = self.env.examine_visually(fn_args["object_name"])
-                elif fn_name == "measure_temperature":
-                    res = self.env.measure_temperature(fn_args["object_name"])
-                elif fn_name == "measure_voltage":
-                    res = self.env.measure_voltage(fn_args["object_name"])
-                elif fn_name == "touch":
-                    res = self.env.touch(fn_args["object_name"])
-                elif fn_name == "taste":
-                    res = self.env.taste(fn_args["object_name"])
-                elif fn_name == "add_learned_rule":
-                    rule_text = fn_args["rule"]
-                    self.memory.add_learned_rule(rule_text)
-                    res = {"status": "success", "rule_added": rule_text}
-                    print(f"[Memory] Rule Saved to Memory: {rule_text}", flush=True)
-                else:
-                    res = {"error": f"Tool '{fn_name}' not implemented."}
+                res = self._dispatch_tool(fn_name, fn_args)
             except Exception as e:
                 res = {"error": str(e)}
 
