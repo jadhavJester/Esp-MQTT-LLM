@@ -167,6 +167,42 @@ Guidelines:
 """
 
 
+DELAY_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "delay",
+        "description": "Introduce a delay (pause) between sequential actions. Use this to wait between turning a state on and off, e.g. for blinking an LED with specific intervals.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "seconds": {
+                    "type": "number",
+                    "description": "Number of seconds to delay/pause before the next action"
+                }
+            },
+            "required": ["seconds"]
+        }
+    }
+}
+
+
+def build_chat_tools(connected_servers):
+    """Merge MCP tools from all connected servers plus the local delay tool.
+
+    Returns (all_tools, tool_owner) where all_tools is the Ollama
+    function-calling tool list and tool_owner maps each tool name back to
+    its server (the local "delay" tool has no server owner).
+    """
+    all_tools = []
+    tool_owner = {}  # tool name -> server_name
+    for server_name, tools in connected_servers.items():
+        for t in tools:
+            tool_owner[t.name] = server_name
+        all_tools.extend(mcp_tools_to_ollama_tools(tools))
+    all_tools.append(DELAY_TOOL)
+    return all_tools, tool_owner
+
+
 async def chat_loop():
     print("Connected. Type a message (or 'quit'). Example: 'turn the LED on'", flush=True)
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
@@ -181,32 +217,7 @@ async def chat_loop():
             break
         messages.append({"role": "user", "content": user_input})
 
-        # Gather all tools from all currently connected ESP32 MCP servers
-        all_tools = []
-        tool_owner = {}  # tool name -> server_name
-        for server_name, tools in connected_servers.items():
-            for t in tools:
-                tool_owner[t.name] = server_name
-            all_tools.extend(mcp_tools_to_ollama_tools(tools))
-
-        # Add the local delay tool for pacing actions/blinking
-        all_tools.append({
-            "type": "function",
-            "function": {
-                "name": "delay",
-                "description": "Introduce a delay (pause) between sequential actions. Use this to wait between turning a state on and off, e.g. for blinking an LED with specific intervals.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "seconds": {
-                            "type": "number",
-                            "description": "Number of seconds to delay/pause before the next action"
-                        }
-                    },
-                    "required": ["seconds"]
-                }
-            }
-        })
+        all_tools, tool_owner = build_chat_tools(connected_servers)
 
         response = ollama_client.chat(
             model=OLLAMA_MODEL,
