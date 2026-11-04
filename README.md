@@ -42,6 +42,9 @@ The ESP32 registers its capabilities dynamically upon connection. The agent clie
 - [main/](main/): ESP-IDF project source code, task handlers, and GPIO drivers.
 - [components/esp-mcp-over-mqtt/](components/esp-mcp-over-mqtt/): Client/Server MQTT C implementation of the MCP protocol.
 - [ollama_agent.py](ollama_agent.py): Python client running the interactive Ollama LLM chat loop and tool executor.
+- [curious_robot/](curious_robot/): Offline LLM-driven robot simulation — environment, agent, and memory modules behind `main.py`.
+- [tests/](tests/): Pytest suite for the Python side (see Testing below).
+- [docs/](docs/): Mobile & web dashboard (`index.html`) plus setup guides.
 - [sdkconfig.defaults](sdkconfig.defaults): Project configuration defaults (enables MQTT 5.0).
 
 ---
@@ -161,7 +164,9 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 The Python side has a pytest suite in `tests/`:
 
 - `tests/test_ollama_agent_tools.py` — MCP-to-Ollama tool-schema conversion and tool-result text joining in `ollama_agent.py`
+- `tests/test_build_chat_tools.py` — tool merging across connected servers plus the local delay tool in `ollama_agent.py`
 - `tests/test_curious_robot.py` — the offline simulation modules: `Environment` movement/proximity gating/sensing, and `MemoryManager` persistence, duplicate-rule guard, and recovery from corrupt or malformed memory files
+- `tests/test_curious_robot_agent.py` — the agent's tool-dispatch routing against its advertised tool schema and error paths
 
 ```bash
 pip install pytest
