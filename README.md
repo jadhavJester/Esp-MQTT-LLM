@@ -86,8 +86,7 @@ The agent runs locally on your PC, communicating with the broker and Ollama Clou
 ### Prerequisites
 1. Install client libraries:
    ```powershell
-   pip install ollama "mcp[cli]" --break-system-packages
-   pip install "git+https://github.com/emqx/mcp-python-sdk@main" --break-system-packages
+   pip install -r requirements.txt
    ```
 2. Set up your environment variables:
    ```powershell
@@ -163,16 +162,24 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 
 The Python side has a pytest suite in `tests/`:
 
-- `tests/test_ollama_agent_tools.py` — MCP-to-Ollama tool-schema conversion and tool-result text joining in `ollama_agent.py`
+- `tests/test_ollama_agent_tools.py` — MCP-to-Ollama tool-schema conversion in `ollama_agent.py`
+- `tests/test_call_device_tool.py` — tool-result text joining in `ollama_agent.call_device_tool`
 - `tests/test_build_chat_tools.py` — tool merging across connected servers plus the local delay tool in `ollama_agent.py`
+- `tests/test_mcp_callbacks.py` — the MCP connect/disconnect callbacks that register server tools in `ollama_agent.py`
 - `tests/test_curious_robot.py` — the offline simulation modules: `Environment` movement/proximity gating/sensing, and `MemoryManager` persistence, duplicate-rule guard, and recovery from corrupt or malformed memory files
 - `tests/test_curious_robot_agent.py` — the agent's tool-dispatch routing against its advertised tool schema and error paths
+- `tests/test_curious_robot_step.py` — the agent's `step()` chat loop (tool dispatch + episodic logging) with a stubbed Ollama client
+- `tests/test_curious_robot_main.py` — the simulation entry point's missing-`OLLAMA_API_KEY` guard; runs only where the runtime dependencies are installed (see below), skipped otherwise
 
 ```bash
-pip install pytest
+pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
-`curious_robot/` runs fully offline; the interactive demos in
-`ollama_agent.py` and `curious_robot/main.py` need a real `OLLAMA_API_KEY`
-and are not covered by the automated tests.
+`curious_robot/` runs fully offline, except for the agent's LLM calls.
+The interactive `chat_loop()` in `ollama_agent.py` and the simulation
+loop in `curious_robot/main.py` need a real `OLLAMA_API_KEY` and are not
+covered by the automated tests. Where the runtime dependencies
+(`ollama`, `mcp`, `anyio`) are not installed, `tests/conftest.py`
+substitutes lightweight stand-ins so the offline tests still run; with
+`requirements.txt` installed, the suite runs against the real packages.
