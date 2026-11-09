@@ -4,9 +4,7 @@ to Ollama Cloud, and runs a simple chat loop where the model can call those
 tools to control the device.
 
 Install:
-    pip install ollama --break-system-packages
-    pip install "mcp[cli]" --break-system-packages
-    pip install "git+https://github.com/emqx/mcp-python-sdk@main" --break-system-packages
+    pip install -r requirements.txt
 
 Env vars:
     OLLAMA_API_KEY   - from https://ollama.com/settings/keys

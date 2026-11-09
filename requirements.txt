@@ -1,0 +1,16 @@
+# Runtime dependencies for the Python side of Esp-MQTT-LLM
+# (ollama_agent.py and curious_robot/).
+#
+# Install with:  pip install -r requirements.txt
+#
+# anyio is listed explicitly even though it also arrives transitively
+# via mcp: both entry points import it directly (ollama_agent.py for
+# the chat loop, curious_robot/main.py to run the simulation).
+
+ollama
+# The MCP-over-MQTT transport comes from the EMQX fork of the MCP
+# Python SDK, not from PyPI: its distribution name is `mcp`, so the
+# direct reference replaces the PyPI `mcp[cli]` install (same as the
+# two-step install the README used to describe).
+mcp[cli] @ git+https://github.com/emqx/mcp-python-sdk@main
+anyio
