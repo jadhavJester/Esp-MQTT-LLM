@@ -4,11 +4,6 @@ import logging
 
 logger = logging.getLogger("explorer_agent")
 
-DEFAULT_DATA = {
-    "episodic_logs": [],
-    "learned_rules": []
-}
-
 
 class MemoryManager:
     def __init__(self, filepath="curious_robot/memory.json"):
