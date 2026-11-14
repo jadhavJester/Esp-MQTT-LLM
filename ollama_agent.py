@@ -201,6 +201,30 @@ def build_chat_tools(connected_servers):
     return all_tools, tool_owner
 
 
+async def handle_tool_call(fn_name, fn_args, tool_owner):
+    """Execute one tool call from the chat loop and return its result text.
+
+    Separated from chat_loop() so the dispatch logic (local delay tool,
+    unknown-tool error, device-tool errors) is unit-testable without a
+    live LLM connection or hardware.
+    """
+    if fn_name == "delay":
+        seconds = float(fn_args.get("seconds", 1.0))
+        logger.info(f"Local delay tool: pausing for {seconds} seconds...")
+        await anyio.sleep(seconds)
+        return json.dumps({"status": "ok", "delayed_seconds": seconds})
+    server_name = tool_owner.get(fn_name)
+    if not server_name:
+        return f"Error: no connected device exposes tool '{fn_name}'"
+    try:
+        tool_result = await call_device_tool(server_name, fn_name, fn_args)
+        logger.info(f"Called {fn_name}({fn_args}) on {server_name} -> {tool_result}")
+        return tool_result
+    except Exception as e:
+        logger.error(f"Error calling {fn_name}({fn_args}) on {server_name}: {e}")
+        return json.dumps({"error": str(e)})
+
+
 async def chat_loop():
     print("Connected. Type a message (or 'quit'). Example: 'turn the LED on'", flush=True)
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
@@ -230,23 +254,7 @@ async def chat_loop():
             for call in msg["tool_calls"]:
                 fn_name = call["function"]["name"]
                 fn_args = call["function"].get("arguments", {})
-                
-                if fn_name == "delay":
-                    seconds = float(fn_args.get("seconds", 1.0))
-                    logger.info(f"Local delay tool: pausing for {seconds} seconds...")
-                    await anyio.sleep(seconds)
-                    tool_result = json.dumps({"status": "ok", "delayed_seconds": seconds})
-                else:
-                    server_name = tool_owner.get(fn_name)
-                    if not server_name:
-                        tool_result = f"Error: no connected device exposes tool '{fn_name}'"
-                    else:
-                        try:
-                            tool_result = await call_device_tool(server_name, fn_name, fn_args)
-                            logger.info(f"Called {fn_name}({fn_args}) on {server_name} -> {tool_result}")
-                        except Exception as e:
-                            logger.error(f"Error calling {fn_name}({fn_args}) on {server_name}: {e}")
-                            tool_result = json.dumps({"error": str(e)})
+                tool_result = await handle_tool_call(fn_name, fn_args, tool_owner)
                 messages.append({"role": "tool", "content": tool_result, "name": fn_name})
 
             response = ollama_client.chat(model=OLLAMA_MODEL, messages=messages, tools=all_tools)
