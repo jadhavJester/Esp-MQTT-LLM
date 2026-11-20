@@ -44,6 +44,16 @@ def test_touch_requires_proximity(env):
     assert result["sharpness_rating"] == 1
 
 
+def test_too_far_error_reports_rounded_distance(env):
+    # From (0, 0), the fork at (2, 3) is sqrt(13) ~= 3.61m away; the error
+    # should show the same 2-decimal rounding as scan_room/move_to,
+    # not the raw float (3.605551275463989m).
+    result = env.touch("metal_fork")
+    assert result["error"] == (
+        "Too far from 'metal_fork' (distance: 3.61m). Move closer to touch."
+    )
+
+
 def test_temperature_and_voltage_gated_by_proximity(env):
     result = env.measure_temperature("power_adapter")
     assert "error" in result

@@ -85,9 +85,9 @@ class Environment:
             raise ValueError(f"Object '{object_name}' does not exist in this environment.")
         obj = self.objects[object_name]
         dist = math.sqrt((obj["x"] - self.robot_x)**2 + (obj["y"] - self.robot_y)**2)
-        if dist > 1.5:
-            return False, dist
-        return True, dist
+        # Round like scan_room/move_to do, so the too-far error messages
+        # report "3.61m" instead of the raw float (3.605551275463989m).
+        return (dist <= 1.5), round(dist, 2)
 
     def examine_visually(self, object_name: str):
         # Can examine visually from a distance
