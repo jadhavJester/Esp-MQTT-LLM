@@ -167,6 +167,7 @@ The Python side has a pytest suite in `tests/`:
 - `tests/test_build_chat_tools.py` — tool merging across connected servers plus the local delay tool in `ollama_agent.py`
 - `tests/test_chat_tool_call.py` — the chat loop's per-call dispatch in `ollama_agent.py`: the local delay tool, unknown-tool error, and device-tool failure path
 - `tests/test_chat_loop.py` — the interactive `chat_loop` in `ollama_agent.py` (quit, EOF, plain replies, and the tool-call loop) with canned input and a stub Ollama client
+- `tests/test_ollama_agent_main.py` — the `main()` entry point in `ollama_agent.py` (server-connected and 10-second-timeout paths) with a fake transport client and a fake anyio deadline scope
 - `tests/test_patched_initialize_mcp_server.py` — the MCP session monkey-patch in `ollama_agent.py`, exercised with a fake transport client
 - `tests/test_mcp_callbacks.py` — the MCP connect/disconnect callbacks that register server tools in `ollama_agent.py`
 - `tests/test_curious_robot.py` — the offline simulation modules: `Environment` movement/proximity gating/sensing, and `MemoryManager` persistence, duplicate-rule guard, and recovery from corrupt or malformed memory files
