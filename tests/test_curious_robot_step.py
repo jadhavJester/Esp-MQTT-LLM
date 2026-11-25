@@ -83,6 +83,32 @@ def test_step_with_no_tool_call_just_talks(tmp_path, monkeypatch):
     assert agent.memory.data["episodic_logs"] == []
 
 
+def test_second_step_sends_memory_summary_as_context(tmp_path, monkeypatch):
+    # The first step seeds the chat with "Start exploring the room."; later
+    # steps must instead append the live memory summary + robot position
+    # as a user message, so the model reasons from current state.
+    stub = _StubClient([
+        _reply(content="First.", tool_calls=[_tool_call("scan_room")]),
+        _reply(content="Second."),
+    ])
+    monkeypatch.setattr(agent_module, "Client", lambda *a, **k: stub)
+    agent = CuriousExplorerAgent(
+        Environment(),
+        MemoryManager(filepath=str(tmp_path / "memory.json")),
+    )
+    asyncio.run(agent.step())
+    asyncio.run(agent.step())
+    assert len(stub.calls) == 2
+    # The stub records the live message list by reference, so read the
+    # agent's own history: the second user message must be the context
+    # prompt, not another "Start exploring" seed.
+    user_msgs = [m for m in agent.messages if m.get("role") == "user"]
+    assert len(user_msgs) == 2
+    assert "ROBOT MEMORY STATE" in user_msgs[1]["content"]
+    assert "Robot Current Location" in user_msgs[1]["content"]
+    assert "scan_room" in user_msgs[1]["content"]  # episodic log from step 1
+
+
 def test_step_turns_bad_tool_call_into_error_message(tmp_path, monkeypatch):
     # move_to without coordinates: _dispatch_tool raises KeyError, step()
     # must convert it into an error dict the model can read, not crash.

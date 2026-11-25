@@ -25,6 +25,15 @@ def agent(tmp_path):
     )
 
 
+def test_init_requires_api_key(tmp_path, monkeypatch):
+    monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
+    with pytest.raises(ValueError, match="OLLAMA_API_KEY"):
+        CuriousExplorerAgent(
+            Environment(),
+            MemoryManager(filepath=str(tmp_path / "memory.json")),
+        )
+
+
 def test_every_defined_tool_dispatches(agent):
     """No name drift between the tool schema and the dispatch table."""
     defined = {t["function"]["name"] for t in agent.get_tool_definitions()}
