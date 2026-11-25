@@ -1,4 +1,5 @@
-"""Tests for ollama_agent.on_mcp_connect / on_mcp_disconnect.
+"""Tests for ollama_agent.on_mcp_server_discovered / on_mcp_connect /
+on_mcp_disconnect.
 
 These callbacks maintain the module-level registry of connected ESP32
 servers and their tools. A fake transport client stands in for the real
@@ -16,10 +17,14 @@ class _FakeClient:
     def __init__(self, tools):
         self._tools = tools
         self.listed = []
+        self.initialized = []
 
     async def list_tools(self, server_name):
         self.listed.append(server_name)
         return SimpleNamespace(tools=self._tools)
+
+    async def initialize_mcp_server(self, server_name):
+        self.initialized.append(server_name)
 
 
 def _mcp_tool(name):
@@ -33,6 +38,13 @@ def _clean_registry():
     ollama_agent.connected_servers.clear()
     yield
     ollama_agent.connected_servers.clear()
+
+
+def test_discovered_server_starts_initialization():
+    client = _FakeClient([_mcp_tool("led_on")])
+    asyncio.run(ollama_agent.on_mcp_server_discovered(client, "esp32_devkit"))
+    assert client.initialized == ["esp32_devkit"]
+    assert "esp32_devkit" not in ollama_agent.connected_servers
 
 
 def test_connect_registers_server_tools():

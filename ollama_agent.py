@@ -49,17 +49,20 @@ async def patched_initialize_mcp_server(
             if self.on_mcp_connect:
                 self._task_group.start_soon(self.on_mcp_connect, self, server_name, ("error", "subscribe_mcp_server_topics_failed"))
             return
-        client_session = self._create_session(
-            server_id,
-            server_name,
-            read_timeout_seconds,
-            sampling_callback,
-            list_roots_callback,
-            logging_callback,
-            message_handler
-        )
-        self.client_sessions[server_name] = client_session
+        # _create_session runs inside the try so an McpError there hits the
+        # handler below (report the failure, drop the session) instead of
+        # escaping the background task uncaught.
         try:
+            client_session = self._create_session(
+                server_id,
+                server_name,
+                read_timeout_seconds,
+                sampling_callback,
+                list_roots_callback,
+                logging_callback,
+                message_handler
+            )
+            self.client_sessions[server_name] = client_session
             logger.debug(f"before initialize: {server_name}")
             async def after_initialize():
                 try:

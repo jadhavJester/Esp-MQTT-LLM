@@ -47,11 +47,13 @@ class _FakeSession:
 
 
 class _FakeTransportClient:
-    def __init__(self, subscribe_result="success", session=None):
+    def __init__(self, subscribe_result="success", session=None,
+                 create_session_error=None):
         self.client_sessions = {}
         self._task_group = _FakeTaskGroup()
         self.subscribe_result = subscribe_result
         self.session = session if session is not None else _FakeSession()
+        self.create_session_error = create_session_error
         self.subscribe_calls = []
         self.connect_calls = []
         self.on_mcp_connect = self._record_connect
@@ -60,6 +62,8 @@ class _FakeTransportClient:
         return f"id-{server_name}"
 
     def _create_session(self, server_id, server_name, *args, **kwargs):
+        if self.create_session_error is not None:
+            raise self.create_session_error
         return self.session
 
     async def subscribe_mcp_server_topics(self, server_name, after_subscribed):
@@ -117,3 +121,15 @@ def test_failed_initialize_cleans_up_session():
     _initialize(client)
     assert "esp32_devkit" not in client.client_sessions
     assert client.connect_calls == []
+
+
+def test_create_session_mcp_error_reports_connect_failure():
+    # _create_session raising McpError must hit the except branch: drop
+    # the (never registered) session and report the failure, not crash
+    # the background task.
+    client = _FakeTransportClient(
+        create_session_error=ollama_agent.McpError("boom"))
+    _initialize(client)
+    assert "esp32_devkit" not in client.client_sessions
+    assert client.connect_calls == [
+        ("esp32_devkit", ("error", ollama_agent.McpError))]
